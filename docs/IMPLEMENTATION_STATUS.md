@@ -115,3 +115,11 @@ The full staged scope and exact remaining work are tracked in REDESIGN_PROGRESS.
 - Earlier statement that no live account had been promoted applied to the previous milestone; the owner subsequently requested and received super-admin access. This redesign preserves that access.
 - Verification: 45 unit/database tests, all three isolated integration scenarios and four desktop/mobile smoke tests passed. ESLint, strict TypeScript and production build passed. Final evidence is recorded in REDESIGN_PROGRESS.md.
 - Performance: the final local cold-start homepage sample showed 19.55 s LCP during database initialisation under concurrent QA load; seven other desktop/Android samples were 0.81–1.54 s. Reserving loading-page height removed the previously observed layout shift: all eight final samples had 0 CLS. These are local observations, not field Core Web Vitals; INP is unmeasured. Production database/storage and cold-start work remains required.
+
+
+## Vercel database repair — 26 November 2026
+
+- Root cause observed in the deployment dashboard: no environment variables, no connected database. Local account data was correctly excluded from GitHub.
+- Connected a new free Neon PostgreSQL database to Production and set the HTTPS APP_URL. No local user records, passwords or uploaded photos were exported.
+- Serialized automatic migrations with a transaction advisory lock on a single pooled connection; failures roll back and initialization can retry. Added managed-owner membership migration 009 and included all SQL assets in Vercel function output. Reject local filesystem database fallback on Vercel.
+- Validation: 48 unit/database tests passed, including non-superuser role switching, migration retry/data preservation, and hosted storage configuration. Production build, lint and TypeScript passed. All four isolated desktop/Pixel 7 browser tests passed, including registration, private dashboard persistence, saved photo edits, logout and media access denial. Live deployment verification is performed after publishing this fix.

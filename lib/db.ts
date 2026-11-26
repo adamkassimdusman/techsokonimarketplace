@@ -1,7 +1,8 @@
 import { PGlite } from "@electric-sql/pglite";
 import { Pool } from "pg";
-import { readFile, mkdir } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import path from "node:path";
+import { databaseConfig, initializeSchema } from "./database-startup";
 export type Actor = { id: string; role: string };
 export type Query = <
   T extends Record<string, unknown> = Record<string, unknown>,
@@ -20,53 +21,45 @@ const db = (globalDB.marketDB ??= { queue: Promise.resolve() });
 async function init() {
   if (db.ready) return db.ready;
   db.ready = (async () => {
-    if (process.env.DATABASE_URL)
-      db.pool = new Pool({
-        connectionString: process.env.DATABASE_URL,
-        max: 8,
+    const config = databaseConfig(process.env);
+    if (config.kind === "postgres") {
+      db.pool ??= new Pool({
+        connectionString: config.url,
+        max: 3,
+        connectionTimeoutMillis: 15000,
+        idleTimeoutMillis: 10000,
       });
-    else if (process.env.LOCAL_DATABASE === "1") {
+      const client = await db.pool.connect();
+      try {
+        await initializeSchema(
+          {
+            query: (sql) => client.query(sql),
+            exec: (sql) => client.query(sql),
+          },
+          true,
+        );
+      } finally {
+        client.release();
+      }
+    } else {
       const directory = path.resolve(
-        /* turbopackIgnore: true */ process.env.LOCAL_DATABASE_PATH ??
-          ".data/postgres",
+        /* turbopackIgnore: true */ config.directory,
       );
       await mkdir(path.dirname(directory), { recursive: true });
-      db.local = new PGlite(directory);
-    } else
-      throw new Error(
-        "Configure DATABASE_URL. Local development requires LOCAL_DATABASE=1.",
+      db.local ??= new PGlite(directory);
+      await initializeSchema(
+        {
+          query: (sql) => db.local!.query(sql),
+          exec: (sql) => db.local!.exec(sql),
+        },
+        false,
       );
-    const check = db.pool
-      ? await db.pool.query("SELECT to_regclass('public.migrations') AS name")
-      : await db.local!.query<{ name: string }>(
-          "SELECT to_regclass('public.migrations') AS name",
-        );
-    if (!check.rows[0].name) {
-      const sql = await readFile(path.resolve("db/001_initial.sql"), "utf8");
-      if (db.pool) await db.pool.query("BEGIN;" + sql + "COMMIT;");
-      else await db.local!.exec("BEGIN;" + sql + "COMMIT;");
     }
-    const versions = db.pool
-      ? await db.pool.query("SELECT version FROM migrations")
-      : await db.local!.query<{ version: number }>(
-          "SELECT version FROM migrations",
-        );
-    for (const [version, file] of [
-      [2, "002_participant_access_notifications.sql"],
-      [3, "003_booking_availability.sql"],
-      [4, "004_reservation_status_guard.sql"],
-      [5, "005_reservation_releases.sql"],
-      [6, "006_roles_client_interactions.sql"],
-      [7, "007_public_seller_directory.sql"],
-      [8, "008_listing_draft_workspace.sql"],
-    ] as const) {
-      if (!versions.rows.some((row) => row.version === version)) {
-        const sql = await readFile(path.resolve("db", file), "utf8");
-        if (db.pool) await db.pool.query("BEGIN;" + sql + "COMMIT;");
-        else await db.local!.exec("BEGIN;" + sql + "COMMIT;");
-      }
-    }
-  })();
+  })().catch((error) => {
+    // A transient connection or migration failure must not poison this instance.
+    db.ready = undefined;
+    throw error;
+  });
   return db.ready;
 }
 export async function transaction<T>(

@@ -17,6 +17,7 @@ for (const file of [
   "006_roles_client_interactions.sql",
   "007_public_seller_directory.sql",
   "008_listing_draft_workspace.sql",
+  "009_database_role_membership.sql",
 ])
   await db.exec(await readFile(path.join("db", file), "utf8"));
 const password = randomBytes(24).toString("hex");

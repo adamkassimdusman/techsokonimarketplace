@@ -34,3 +34,7 @@ Added audited admin access management, operator super-admin bootstrap, private c
 - Added owner-only incomplete text draft recovery and safe photo previews/reorder/removal. Existing accounts, listings and admin permissions preserved.
 - Added transparent laptop finder and minimum-sample asking-price insights; no fake inventory or verification.
 - Migrations 7/8 preserve public projection/private draft boundaries. Advanced trust, monetisation, saved-search events and PWA remain staged follow-ups.
+
+## 26 November 2026 — hosted database startup
+- Added PostgreSQL cold-start migration locking, atomic rollback/retry, managed-owner role membership and explicit SQL asset tracing for Vercel.
+- Reject filesystem-backed database startup on Vercel and document the required hosted PostgreSQL/APP_URL setup.

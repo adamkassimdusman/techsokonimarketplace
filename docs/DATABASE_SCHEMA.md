@@ -45,3 +45,5 @@ Users additionally accept super_admin; app_admin recognizes both staff roles. Me
 ## Redesign migrations
 7. public_sellers() is a read-only public projection for published-stock sellers. No email, authentication, roles or serial fields.
 8. listing_drafts contains user_id, whitelisted JSON fields, monotonic client revision and updated_at, protected by owner-only RLS. Images receive an owner-only DELETE policy restricted to draft/pending parent listings; server validation controls retained IDs and ordering.
+
+Migration 009 grants the trusted migration/database owner membership in `marketplace_app`, allowing `SET LOCAL ROLE` on managed PostgreSQL without superuser access. It does not modify website user roles.

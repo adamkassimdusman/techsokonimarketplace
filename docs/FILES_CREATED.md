@@ -110,3 +110,8 @@ Independent marketplace source. Runtime data, credentials, caches and test trace
 - `tests/workflows.test.ts`
 - `tsconfig.json`
 - `vitest.config.ts`
+
+## Hosted database repair additions
+- `lib/database-startup.ts`
+- `db/009_database_role_membership.sql`
+- `tests/database-startup.test.ts`

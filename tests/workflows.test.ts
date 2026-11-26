@@ -38,6 +38,7 @@ beforeAll(async () => {
     "006_roles_client_interactions.sql",
     "007_public_seller_directory.sql",
     "008_listing_draft_workspace.sql",
+    "009_database_role_membership.sql",
   ])
     await db.exec(await readFile("db/" + file, "utf8"));
 });
