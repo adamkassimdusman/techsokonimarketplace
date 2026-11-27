@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import sharp from "sharp";
+import { randomBytes } from "node:crypto";
 test("homepage, combined filters and mobile layout", async ({ page }) => {
   await page.goto("/");
   await expect(
@@ -87,11 +88,13 @@ test("registration, private dashboard and listing draft persist", async ({
   await page
     .getByRole("button", { name: "4. Photographs", exact: true })
     .click();
-  const buffer = await sharp({
-    create: { width: 240, height: 160, channels: 3, background: "#087b69" },
+  // Five original files exceed Vercel's request limit; prepared uploads must not.
+  const buffer = await sharp(randomBytes(1100 * 900 * 3), {
+    raw: { width: 1100, height: 900, channels: 3 },
   })
     .png()
     .toBuffer();
+  expect(buffer.length * 5).toBeGreaterThan(4_500_000);
   await page.getByLabel(/Add 5–10 photographs/).setInputFiles(
     Array.from({ length: 5 }, (_, i) => ({
       name: `automated-test-only-${i}.png`,
@@ -99,8 +102,36 @@ test("registration, private dashboard and listing draft persist", async ({
       buffer,
     })),
   );
+  await expect(page.locator(".photo-preview-grid img")).toHaveCount(5, { timeout: 45000 });
+  const uploadBytes = await page
+    .locator('input[name="photos"]')
+    .evaluate((input: HTMLInputElement) =>
+      Array.from(input.files ?? []).reduce((sum, file) => sum + file.size, 0),
+    );
+  expect(uploadBytes).toBeLessThan(3 * 1024 * 1024);
   await page.getByRole("button", { name: "6. Ownership", exact: true }).click();
   await page.getByRole("checkbox").last().check();
+  let interruptSave = true;
+  await page.route("**/sell?edit=*", async (route) => {
+    if (interruptSave && route.request().method() === "POST") {
+      interruptSave = false;
+      await route.fulfill({
+        status: 503,
+        contentType: "text/plain",
+        body: "Temporary upload interruption",
+      });
+    } else await route.continue();
+  });
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(page.getByRole("main").getByRole("alert")).toContainText(
+    "Your form is still here",
+  );
+  await expect(page.getByRole("checkbox").last()).toBeChecked();
+  expect(
+    await page
+      .locator('input[name="photos"]')
+      .evaluate((input: HTMLInputElement) => input.files?.length),
+  ).toBe(5);
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect(page.getByRole("status")).toContainText("Draft saved");
   await page.goto("/dashboard");
@@ -108,7 +139,7 @@ test("registration, private dashboard and listing draft persist", async ({
   await page
     .getByRole("button", { name: "4. Photographs", exact: true })
     .click();
-  await expect(page.locator(".photo-preview-grid img")).toHaveCount(5);
+  await expect(page.locator(".photo-preview-grid img")).toHaveCount(5, { timeout: 45000 });
   const nextCover = await page
     .locator(".photo-preview-grid img")
     .nth(1)

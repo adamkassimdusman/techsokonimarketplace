@@ -9,6 +9,7 @@ import {
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { MAX_LISTING_UPLOAD_BYTES } from "@/lib/listing-upload";
 import { sanitisePhoto } from "@/lib/images";
 import { service, transaction } from "@/lib/db";
 import { requireUser, createSession, rateLimit } from "@/lib/auth";
@@ -171,6 +172,12 @@ export async function saveListing(_: Result, f: FormData): Promise<Result> {
     const files = f
       .getAll("photos")
       .filter((v): v is File => v instanceof File && v.size > 0);
+    if (
+      files.reduce((sum, file) => sum + file.size, 0) > MAX_LISTING_UPLOAD_BYTES
+    )
+      throw new Error(
+        "Photos are too large to upload together. Select them again so smaller copies can be prepared.",
+      );
     const existing = id
       ? await transaction(user, (q) =>
           q<{ id: string }>(

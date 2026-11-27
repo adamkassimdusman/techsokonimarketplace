@@ -1,14 +1,19 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
+import { preparePhoto } from "@/lib/prepare-photo";
 type Photo = { key: string; url: string; file?: File; id?: string };
 export function PhotoUploader({
   existing = [],
+  onPreparing,
 }: {
   existing?: { id: string }[];
+  onPreparing: (preparing: boolean) => void;
 }) {
   const [photos, setPhotos] = useState<Photo[]>(
     existing.map((p) => ({ key: p.id, id: p.id, url: "/media/" + p.id })),
   );
+  const preparingRef = useRef(false);
+  const [preparing, setPreparing] = useState(false);
   const [error, setError] = useState("");
   const input = useRef<HTMLInputElement>(null);
   const urls = useRef<string[]>([]);
@@ -24,7 +29,8 @@ export function PhotoUploader({
       input.current.dispatchEvent(new Event("change", { bubbles: true }));
     }
   }
-  function add(files: FileList | File[]) {
+  async function add(files: FileList | File[]) {
+    if (preparingRef.current) return;
     const incoming = Array.from(files);
     if (
       incoming.some(
@@ -41,14 +47,31 @@ export function PhotoUploader({
       return;
     }
     setError("");
-    sync([
-      ...photos,
-      ...incoming.map((file) => {
-        const url = URL.createObjectURL(file);
-        urls.current.push(url);
-        return { key: crypto.randomUUID(), file, url };
-      }),
-    ]);
+    preparingRef.current = true;
+    setPreparing(true);
+    onPreparing(true);
+    try {
+      const prepared: File[] = [];
+      for (const file of incoming) prepared.push(await preparePhoto(file));
+      sync([
+        ...photos,
+        ...prepared.map((file) => {
+          const url = URL.createObjectURL(file);
+          urls.current.push(url);
+          return { key: crypto.randomUUID(), file, url };
+        }),
+      ]);
+    } catch (failure) {
+      setError(
+        failure instanceof Error
+          ? failure.message
+          : "This photo could not be opened. Choose a valid JPEG, PNG or WebP photograph.",
+      );
+    } finally {
+      preparingRef.current = false;
+      setPreparing(false);
+      onPreparing(false);
+    }
   }
   return (
     <>
@@ -71,6 +94,7 @@ export function PhotoUploader({
             type="file"
             accept="image/jpeg,image/png,image/webp"
             multiple
+            disabled={preparing}
             onChange={(e) => {
               if (e.target.files) add(e.target.files);
               e.target.value = "";
@@ -95,9 +119,10 @@ export function PhotoUploader({
           .map((p) => p.id)
           .join(",")}
       />
-      <p className="fine">
-        {photos.length} of 10 photos · Images are resized and metadata removed
-        on save. Upload may take a moment.
+      <p className="fine" aria-live="polite">
+        {preparing
+          ? "Preparing photos for upload…"
+          : `${photos.length} of 10 photos · Photos are resized before upload. Your original files stay unchanged.`}
       </p>
       {error && (
         <p role="alert" className="error">
@@ -118,7 +143,9 @@ export function PhotoUploader({
               <button
                 type="button"
                 className="secondary"
-                disabled={i === 0 || (!p.id && !!photos[i - 1]?.id)}
+                disabled={
+                  preparing || i === 0 || (!p.id && !!photos[i - 1]?.id)
+                }
                 aria-label={"Move photo " + (i + 1) + " earlier"}
                 onClick={() => {
                   const next = [...photos];
@@ -131,6 +158,7 @@ export function PhotoUploader({
               <button
                 type="button"
                 className="secondary"
+                disabled={preparing}
                 aria-label={"Remove photo " + (i + 1)}
                 onClick={() => sync(photos.filter((x) => x.key !== p.key))}
               >

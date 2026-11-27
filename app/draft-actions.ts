@@ -4,26 +4,7 @@ import { requireUser, rateLimit } from "@/lib/auth";
 import { transaction } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import type { Result } from "./actions";
-const allowed = [
-  "brand",
-  "model",
-  "cpu",
-  "ram",
-  "storage",
-  "storage_type",
-  "gpu",
-  "screen",
-  "condition",
-  "faults",
-  "description",
-  "price",
-  "county",
-  "town",
-  "battery",
-  "warranty",
-  "negotiable",
-  "delivery",
-];
+import { draftFields } from "@/lib/listing-upload";
 export async function autosaveDraft(f: FormData): Promise<Result> {
   const user = await requireUser();
   try {
@@ -35,7 +16,7 @@ export async function autosaveDraft(f: FormData): Promise<Result> {
       .safe()
       .parse(f.get("revision"));
     const fields: Record<string, string> = {};
-    for (const key of allowed) {
+    for (const key of draftFields) {
       const v = f.get(key);
       if (typeof v === "string") fields[key] = z.string().max(5000).parse(v);
     }

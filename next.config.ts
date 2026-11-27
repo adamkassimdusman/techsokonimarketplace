@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 const config: NextConfig = {
   outputFileTracingIncludes: { "/*": ["./db/*.sql"] },
   serverExternalPackages: ["@electric-sql/pglite", "pg", "sharp"],
-  experimental: { serverActions: { bodySizeLimit: "55mb" } },
+  experimental: { serverActions: { bodySizeLimit: "4mb" } },
   async headers() {
     return [
       {

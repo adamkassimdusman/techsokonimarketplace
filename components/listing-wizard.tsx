@@ -2,6 +2,8 @@
 import { useActionState, useState, useRef, useEffect } from "react";
 import { autosaveDraft } from "@/app/draft-actions";
 import { PhotoUploader } from "./photo-uploader";
+import { textDraft, MAX_LISTING_UPLOAD_BYTES } from "@/lib/listing-upload";
+import type { Result } from "@/app/actions";
 import { saveListing } from "@/app/actions";
 import type { Listing } from "@/lib/catalog";
 const steps = [
@@ -37,7 +39,31 @@ export function ListingWizard({
     [],
   );
   const [step, setStep] = useState(0);
-  const [state, submit, pending] = useActionState(saveListing, {});
+  const [preparingPhotos, setPreparingPhotos] = useState(false);
+  const [state, submit, pending] = useActionState<Result, FormData>(
+    async (previous, form) => {
+      const bytes = form
+        .getAll("photos")
+        .reduce(
+          (sum, value) => sum + (typeof value === "string" ? 0 : value.size),
+          0,
+        );
+      if (bytes > MAX_LISTING_UPLOAD_BYTES)
+        return {
+          error:
+            "These photos are too large to upload together. Remove them and select them again to prepare smaller copies.",
+        };
+      try {
+        return await saveListing(previous, form);
+      } catch {
+        return {
+          error:
+            "We couldn’t finish saving. Your form is still here. Check your connection and sign-in, then try again. Before resubmitting, check your dashboard in case the listing was saved.",
+        };
+      }
+    },
+    {},
+  );
   const [review, setReview] = useState<Record<string, string>>({});
   const input = (name: string, label: string, type = "text", fallback = "") => (
     <label>
@@ -88,7 +114,12 @@ export function ListingWizard({
   return (
     <form
       action={submit}
-      onSubmit={() => {
+      onReset={(event) => event.preventDefault()}
+      onSubmit={(event) => {
+        if (preparingPhotos) {
+          event.preventDefault();
+          return;
+        }
         if (timer.current) clearTimeout(timer.current);
       }}
       className="wizard"
@@ -97,11 +128,16 @@ export function ListingWizard({
         if (!listing && !state.id) {
           if (timer.current) clearTimeout(timer.current);
           setDraftStatus("Saving text draft…");
-          const fields = new FormData(form);
-          fields.set("revision", String(Date.now()));
+          const fields = textDraft(new FormData(form));
           timer.current = setTimeout(async () => {
-            const result = await autosaveDraft(fields);
-            setDraftStatus(result.success || result.error || "");
+            try {
+              const result = await autosaveDraft(fields);
+              setDraftStatus(result.success || result.error || "");
+            } catch {
+              setDraftStatus(
+                "Text draft could not be saved. Your form is still here; check your connection.",
+              );
+            }
           }, 1200);
         }
         setReview(
@@ -200,7 +236,10 @@ export function ListingWizard({
           Use actual device photos: front, back, powered-on screen, keyboard,
           ports, defects and charger. Remove private information from the scene.
         </div>
-        <PhotoUploader existing={existingPhotos} />
+        <PhotoUploader
+          existing={existingPhotos}
+          onPreparing={setPreparingPhotos}
+        />
       </fieldset>
       <fieldset hidden={step !== 4}>
         <label>
@@ -319,7 +358,7 @@ export function ListingWizard({
           <button
             type="submit"
             key="publish"
-            disabled={pending}
+            disabled={pending || preparingPhotos}
             onClick={(e) => {
               const form = e.currentTarget.form;
               if (form)
@@ -348,7 +387,7 @@ export function ListingWizard({
           }}
           formNoValidate
           className="secondary"
-          disabled={pending}
+          disabled={pending || preparingPhotos}
         >
           Save draft
         </button>

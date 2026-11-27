@@ -38,3 +38,8 @@ Added audited admin access management, operator super-admin bootstrap, private c
 ## 26 November 2026 — hosted database startup
 - Added PostgreSQL cold-start migration locking, atomic rollback/retry, managed-owner role membership and explicit SQL asset tracing for Vercel.
 - Reject filesystem-backed database startup on Vercel and document the required hosted PostgreSQL/APP_URL setup.
+
+## 27 November 2026 — reliable hosted listing uploads
+- Resize photos before transport to stay below Vercel request limits; retain server validation and metadata stripping.
+- Exclude files and serial numbers from text autosave, and preserve the form on interrupted submissions.
+- Verify oversized original photo batches, retry behavior and saved media on desktop and mobile.

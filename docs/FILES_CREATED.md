@@ -115,3 +115,8 @@ Independent marketplace source. Runtime data, credentials, caches and test trace
 - `lib/database-startup.ts`
 - `db/009_database_role_membership.sql`
 - `tests/database-startup.test.ts`
+
+## Hosted photo upload repair
+- `lib/listing-upload.ts`
+- `lib/prepare-photo.ts`
+- `tests/listing-upload.test.ts`
